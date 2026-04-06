@@ -41,8 +41,9 @@ def classify_document(test_text, word_counts, category_totals, vocabulary):
     vocab_size = len(vocabulary)
 
     for cat in word_counts:
-        log_prob = 0 
-        
+        total_words_all_classes = sum(category_totals.values())
+        prior = math.log(category_totals[cat] / total_words_all_classes)
+        log_prob = prior        
         for word in test_words:
             count = word_counts[cat].get(word, 0)
             
@@ -63,36 +64,52 @@ print(f"\nNew Document: '{new_doc}'")
 print(f"AI Prediction: {prediction}")
 print("Raw Scores (Log-Scale):", all_scores)
 '''
-def classify_by_sampling(test_text, word_counts, category_totals, vocabulary, num_samples=1000):
+import random
+
+def classify_by_sampling(test_text, word_counts, category_totals, vocabulary, num_samples=500):
     test_words = test_text.lower().replace('.', '').replace(',', '').split()
-    results = {}
+    classes = list(word_counts.keys())
     vocab_size = len(vocabulary)
 
-    for cat in word_counts:
-        total_weight = 0
-        
-        for _ in range(num_samples):
-            sample_weight = 1.0
-            
-            for word in test_words:
-                count = word_counts[cat].get(word, 0)
-                prob = (count + 1) / (category_totals[cat] + vocab_size)
-                
-                sample_weight *= prob
-            
-            total_weight += sample_weight
-        
-        results[cat] = total_weight / num_samples
+    weights = {c: 0 for c in classes}
 
-    winner = max(results, key=results.get)
-    return winner, results
+    for _ in range(num_samples):
+        total_words_all_classes = sum(category_totals.values())
 
-test_doc = "The court heard testimony from the witness regarding the contract."
+        r = random.random()
+        cumulative = 0
+
+        for cls in classes:
+            prob = category_totals[cls] / total_words_all_classes
+            cumulative += prob
+            if r <= cumulative:
+                c = cls
+                break
+
+        weight = 1.0
+        for word in test_words:
+            count = word_counts[c].get(word, 0)
+            prob = (count + 1) / (category_totals[c] + vocab_size)
+            weight *= prob
+
+        weights[c] += weight
+
+    total = sum(weights.values())
+    for c in weights:
+        weights[c] /= total
+
+    winner = max(weights, key=weights.get)
+    return winner, weights
+
+#test_doc = "The court heard testimony from the witness regarding the contract."
+test_doc = "Patient is admitted in the hospital"
+
 
 pred1, scores1 = classify_document(test_doc, counts, totals, vocab)
-
 pred2, scores2 = classify_by_sampling(test_doc, counts, totals, vocab)
 
-print(f"\nDocument to Classify: '{test_doc}'")
-print(f"Standard Bayes Prediction: {pred1}")
-print(f"Sampling-based Prediction: {pred2}")
+print(f"\nDocument: '{test_doc}'")
+print(f"Naive Bayes Prediction: {pred1}")
+print(f"Sampling Prediction: {pred2}")
+print("Naive Bayes Scores:", scores1)
+print("Sampling Scores:", scores2)
