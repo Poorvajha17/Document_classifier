@@ -1,115 +1,136 @@
 import os
 import math
-
-def build_model(data_path):
-    word_counts = {}
-    category_totals = {}
-    vocabulary = set()
-
-    categories = [f for f in os.listdir(data_path) if os.path.isdir(os.path.join(data_path, f))]
-
-    for cat in categories:
-        word_counts[cat] = {}
-        category_totals[cat] = 0
-        cat_folder = os.path.join(data_path, cat)
-
-        for filename in os.listdir(cat_folder):
-            if filename.endswith(".txt"):
-                with open(os.path.join(cat_folder, filename), 'r') as f:
-                    text = f.read().lower()
-                    words = text.replace('.', '').replace(',', '').split()
-
-                    for word in words:
-                        word_counts[cat][word] = word_counts[cat].get(word, 0) + 1
-                        category_totals[cat] += 1
-                        vocabulary.add(word)
-
-    return word_counts, category_totals, list(vocabulary)
-
-path_to_data = "data"
-counts, totals, vocab = build_model(path_to_data)
-
-print("AI Training Complete!")
-print(f"Total Unique Words (Vocabulary Size): {len(vocab)}")
-for cat in totals:
-    print(f"Category '{cat}' has {totals[cat]} total words.")
-
-def classify_document(test_text, word_counts, category_totals, vocabulary):
-    test_words = test_text.lower().replace('.', '').replace(',', '').split()
-    
-    scores = {}
-    vocab_size = len(vocabulary)
-
-    for cat in word_counts:
-        total_words_all_classes = sum(category_totals.values())
-        prior = math.log(category_totals[cat] / total_words_all_classes)
-        log_prob = prior        
-        for word in test_words:
-            count = word_counts[cat].get(word, 0)
-            
-            word_probability = (count + 1) / (category_totals[cat] + vocab_size)
-            
-            log_prob += math.log(word_probability)
-        
-        scores[cat] = log_prob
-
-    winner = max(scores, key=scores.get)
-    return winner, scores
-'''
-new_doc = "The patient was seen by a doctor for treatment at the hospital"
-
-prediction, all_scores = classify_document(new_doc, counts, totals, vocab)
-
-print(f"\nNew Document: '{new_doc}'")
-print(f"AI Prediction: {prediction}")
-print("Raw Scores (Log-Scale):", all_scores)
-'''
 import random
 
-def classify_by_sampling(test_text, word_counts, category_totals, vocabulary, num_samples=500):
-    test_words = test_text.lower().replace('.', '').replace(',', '').split()
-    classes = list(word_counts.keys())
-    vocab_size = len(vocabulary)
+def train_model(folder_path):
+    freq = {}
+    total_words = {}
+    vocab = set()
 
-    weights = {c: 0 for c in classes}
+    categories = os.listdir(folder_path)
 
-    for _ in range(num_samples):
-        total_words_all_classes = sum(category_totals.values())
+    for c in categories:
+        path = os.path.join(folder_path, c)
+
+        if not os.path.isdir(path):
+            continue
+
+        freq[c] = {}
+        total_words[c] = 0
+
+        files = os.listdir(path)
+
+        for file in files:
+            if file.endswith(".txt"):
+                f = open(os.path.join(path, file), 'r')
+                text = f.read().lower()
+                f.close()
+
+                text = text.replace('.', '')
+                text = text.replace(',', '')
+
+                words = text.split()
+
+                for w in words:
+                    if w not in freq[c]:
+                        freq[c][w] = 0
+
+                    freq[c][w] += 1
+                    total_words[c] += 1
+                    vocab.add(w)
+
+    return freq, total_words, list(vocab)
+
+def predict(doc, freq, total_words, vocab):
+    text = doc.lower()
+    text = text.replace('.', '')
+    text = text.replace(',', '')
+    words = text.split()
+
+    class_scores = {}
+    V = len(vocab)
+
+    total_all = sum(total_words.values())
+
+    for c in freq:
+        prior = math.log(total_words[c] / total_all)
+        score = prior
+
+        for w in words:
+            count = freq[c].get(w, 0)
+            prob = (count + 1) / (total_words[c] + V)
+            score += math.log(prob)
+
+        class_scores[c] = score
+
+    best_class = max(class_scores, key=class_scores.get)
+    return best_class, class_scores
+
+def predict_sampling(doc, freq, total_words, vocab, samples=500):
+    text = doc.lower()
+    text = text.replace('.', '')
+    text = text.replace(',', '')
+    words = text.split()
+
+    classes = list(freq.keys())
+    weights = {}
+
+    for c in classes:
+        weights[c] = 0
+
+    V = len(vocab)
+
+    for _ in range(samples):
+        total_all = sum(total_words.values())
 
         r = random.random()
         cumulative = 0
 
-        for cls in classes:
-            prob = category_totals[cls] / total_words_all_classes
-            cumulative += prob
+        for c in classes:
+            p = total_words[c] / total_all
+            cumulative += p
             if r <= cumulative:
-                c = cls
+                chosen = c
                 break
 
-        weight = 1.0
-        for word in test_words:
-            count = word_counts[c].get(word, 0)
-            prob = (count + 1) / (category_totals[c] + vocab_size)
+        weight = 1
+
+        for w in words:
+            count = freq[chosen].get(w, 0)
+            prob = (count + 1) / (total_words[chosen] + V)
             weight *= prob
 
-        weights[c] += weight
+        weights[chosen] += weight
 
     total = sum(weights.values())
+
     for c in weights:
-        weights[c] /= total
+        weights[c] = weights[c] / total
 
-    winner = max(weights, key=weights.get)
-    return winner, weights
+    best_class = max(weights, key=weights.get)
+    return best_class, weights
 
-#test_doc = "The court heard testimony from the witness regarding the contract."
-test_doc = "Patient is admitted in the hospital"
+data_path = "data"
 
+freq, total_words, vocab = train_model(data_path)
 
-pred1, scores1 = classify_document(test_doc, counts, totals, vocab)
-pred2, scores2 = classify_by_sampling(test_doc, counts, totals, vocab)
+print("Training complete")
+print("Vocabulary size:", len(vocab))
 
-print(f"\nDocument: '{test_doc}'")
-print(f"Naive Bayes Prediction: {pred1}")
-print(f"Sampling Prediction: {pred2}")
-print("Naive Bayes Scores:", scores1)
-print("Sampling Scores:", scores2)
+for c in total_words:
+    print(c, ":", total_words[c], "words")
+
+doc = "Patient is admitted in the hospital"
+
+pred1, scores1 = predict(doc, freq, total_words, vocab)
+pred2, scores2 = predict_sampling(doc, freq, total_words, vocab)
+
+print("\nDocument:", doc)
+print("Naive Bayes Prediction:", pred1)
+print("Sampling Prediction:", pred2)
+
+print("\nNaive Bayes Scores:")
+print(scores1)
+
+print("\nSampling Scores:")
+print(scores2)
