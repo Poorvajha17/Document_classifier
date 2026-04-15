@@ -147,7 +147,13 @@ if __name__ == "__main__":
     for c in sorted(total_words):
         print(f"  Class {c}: {total_words[c]} words")
 
-    doc = "The government announced new tax policies affecting small businesses"
+    doc = "The stock market saw a sharp increase due to rising corporate profits and strong economic growth"
+    #doc = "The team secured a convincing victory in the championship match with outstanding performance from the players"
+    #doc = "The new artificial intelligence system improves data processing speed and enhances machine learning performance"
+    #doc = "The parliament passed a new law after extensive debate among government officials and political leaders"
+    #doc = "Doctors recommend regular exercise and a balanced diet to maintain good health and prevent diseases"
+    #doc = "The government announced new tax policies affecting small businesses"
+
     print(f"\nDemo Document")
     print(f"Document: {doc}")
 
